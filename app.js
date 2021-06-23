@@ -8,6 +8,7 @@ var indexRouter = require('./routes/index');
 var wxRouter = require('./routes/wx');
 
 var app = express();
+var wxAPI=require("./wxAPI");
 
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
@@ -26,6 +27,17 @@ app.use('/wx', wxRouter);
 app.use(function (req, res, next) {
   next(createError(404));
 });
+
+wxAPI.GetAccessToken().then(()=>{
+  wxAPI.CreateMenu();
+}).then(()=>{
+
+});
+
+//定时获取AccessToken
+setInterval(()=> {
+  wxAPI.GetAccessToken();
+}, 7000*1000);
 
 // error handler
 app.use(function (err, req, res, next) {
