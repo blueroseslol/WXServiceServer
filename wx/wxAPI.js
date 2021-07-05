@@ -108,8 +108,9 @@ let menus = {
     ]
 };
 /*
- * 创建微信菜单
+ * 微信菜单
  */
+//创建微信菜单
 function CreateMenu() {
     let options = {
         url: config.wxAPI + '/menu/create?access_token=' + global.AccessToken,
@@ -158,8 +159,9 @@ function AddCustomerService() {
 }
 
 /*
- * 发送模板星系
+ * 模板信息
  */
+//发送模板信息
 function TemplateMessage() {
     let temp = {
         "touser": "OPENID",
@@ -257,4 +259,29 @@ function GetMaterial(mediaId) {
     });
 }
 
-module.exports = { CreateMenu, GetAccessToken,GetTempMedia,GetMaterial};
+/*
+ * 用户管理
+ */
+function GetUserData(openId) {
+    let options = {
+        url: config.wxAPI + '/user/info?access_token=' + global.AccessToken + "&openid=" + openId + "&lang=zh_CN",
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+        }
+    };
+    //console.log("GetUserData()=>RequestUrl:", options.url);
+
+    return new Promise((resolve, reject) => {
+        request(options, function (err, res, body) {
+            if (res) {
+                //参数见
+                //https://developers.weixin.qq.com/doc/offiaccount/User_Management/Get_users_basic_information_UnionID.html#UinonId
+                resolve(body);
+            } else {
+                reject(err);
+            }
+        });
+    });
+}
+
+module.exports = { CreateMenu, GetAccessToken,GetTempMedia,GetMaterial,GetUserData};
