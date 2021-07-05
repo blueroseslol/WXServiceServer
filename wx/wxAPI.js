@@ -21,7 +21,7 @@ function GetAccessToken() {
     // console.log("GetAccessToken()=>RequestUrl:", options.url);
 
     return new Promise((resolve, reject) => {
-        request(options, function (err, res, body) {
+        request(options, (err, res, body) => {
             if (res) {
                 let token = JSON.parse(body);
                 token.get_time = new Date();
@@ -39,7 +39,7 @@ function GetAccessToken() {
     });
 }
 
-var menus = {
+let menus = {
     "button": [
         {
             "name": "扫码",
@@ -119,7 +119,7 @@ function CreateMenu() {
         }
     };
 
-    request.post(options, function (err, res, body) {
+    request.post(options, (err, res, body) => {
         if (err) {
             console.error("CreateMenu:", err)
         } else {
@@ -148,7 +148,7 @@ function AddCustomerService() {
         }
     };
 
-    request.post(options, function (err, res, body) {
+    request.post(options, (err, res, body) => {
         if (err) {
             console.error("AddCustomerService:", err)
         } else {
@@ -218,39 +218,43 @@ function TemplateMessage() {
 /*
  * 通过mediaId来获取资源
  */
-function getMaterial(mediaId, permanent) {
-    var that = this;
-    var getUrl = permanent ? api.getPermMaterial : api.getTempMaterial;
-    return new Promise(function (resolve, reject) {
-        that.fetchAccessToken().then(function (data) {
-            var url = getUrl + 'access_token=' + data.access_token;
-            if (!permanent) url += '&media_id=' + mediaId;
-            resolve(url)
-        });
-    });
-}
+function GetTempMedia(mediaId) {
+    let options = {
+        method: 'get',
+        url: config.wxAPI+"/media/get?access_token="+global.AccessToken+"&media_id="+mediaId
+    };
 
-function uploadTempMaterial(type, filepath) {
-    var that = this;
-    var form = {  //构造表单
-        media: fs.createReadStream(filepath)
-    }
-    return new Promise(function (resolve, reject) {
-        that.fetchAccessToken().then(function (data) {
-
-            var url = api.uploadMaterial + 'access_token=' + data.access_token + '&type=' + type;
-            request({ url: url, method: 'POST', formData: form, json: true }).then(function (response) {
-                var _data = response.body;
-                if (_data) {
-                    resolve(_data)
-                } else {
-                    throw new Error('upload material failed!');
-                }
-            }).catch(function (err) {
+    return new Promise((resolve, reject) => {
+        request.get(options, (err, res, body) => {
+            if(res)
+            {
+                resolve(body);
+            }else
+            {
                 reject(err);
-            });
+            }
         });
     });
 }
 
-module.exports = { CreateMenu, GetAccessToken };
+function GetMaterial(mediaId) {
+    let options = {
+        method: "post",
+        body:{"media_id":mediaId},
+        url: config.wxAPI+"/material/get_material?access_token="+global.AccessToken
+    };
+
+    return new Promise((resolve, reject) => {
+        request.get(options, (err, res, body) => {
+            if(res)
+            {
+                resolve(body);
+            }else
+            {
+                reject(err);
+            }
+        });
+    });
+}
+
+module.exports = { CreateMenu, GetAccessToken,GetTempMedia,GetMaterial};

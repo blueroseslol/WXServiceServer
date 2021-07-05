@@ -2,11 +2,13 @@ var express = require('express');
 var crypto = require('crypto');
 var router = express.Router();
 const request = require('request')
+const path=require('path');
 const qs = require('querystring');
 const parseString = require('xml2js').parseString;
-var config = require('../config');
-var msg = require("./wxMessage");
-
+const fs=require("fs");
+const config = require('../config');
+const msg = require("./wxMessage");
+const mysql=require("../module/");
 /*
  * 数据接入测试
  */
@@ -26,7 +28,7 @@ function CheckSignature(query) {
     }
 }
 
-router.get('/MessageProcess', function (req, res, next) {
+router.get('/MessageProcess', (req, res, next) => {
     //若确认此次GET请求来自微信服务器，请原样返回echostr参数内容，则接入生效，成为开发者成功，否则接入失败。
     // console.log(req.query.signature, req.query.timestamp, req.query.nonce, req.query.echostr);
 
@@ -37,17 +39,16 @@ router.get('/MessageProcess', function (req, res, next) {
     }
 });
 
-router.post('/MessageProcess', function (req, res, next) {
+router.post('/MessageProcess', (req, res, next) => {
 
     let buffer = [];
-    let that = this;
     req.on('data', function (data) {
         buffer.push(data);
     });
     req.on('end', function () {
         let msgXml = Buffer.concat(buffer).toString('utf-8');
 
-        parseString(msgXml, { explicitArray: false }, function (err, result) {
+        parseString(msgXml, { explicitArray: false }, (err, result) => {
             if (err) throw err;
             result = result.xml;
             // console.log(result);
@@ -61,11 +62,19 @@ router.post('/MessageProcess', function (req, res, next) {
                 //先上传素材---先封装一个post请求，然后通过素材接口获取media_id来获取素材
                 //上传素材就需要封装post get以及素材上传的api
                 //注意在上传素材时需要access_token所以也需要封装获取access_token的api
+                /*
                 var urlPath = path.join(__dirname, "../material/timg.jpg");
                 that.uploadFile(urlPath, "image").then(function (mdeia_id) {
                     resultXml = msg.imgMsg(fromUser, toUser, mdeia_id);
                     res.send(resultXml);
-                })
+                });
+                */
+               
+                console.log( path.join(__dirname,'../'),process.cwd());
+                
+                request(result.PicUrl).pipe(fs.createWriteStream(`${process.cwd()}/public/uploads/${path.basename(result.PicUrl)}`)).on((err)=>{
+                    mysql
+                });
             }
 
             if (result.MsgType === 'event') {
