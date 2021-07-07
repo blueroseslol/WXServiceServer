@@ -82,7 +82,8 @@ router.post('/MessageProcess', (req, res, next) => {
                 });
                 */
                 let getImage = async (openId, mediaId, picURL, res) => {
-                    let mediaPath = `${process.cwd()}/public/uploads/${Date.now().toString()}.jpg`;
+                    let mediaPath = `./public/uploads/${Date.now().toString()}.jpg`;
+
                     await mysql.query("INSERT INTO `wxserviceserver`.`message` (`openid`, `messageType`, `mediaid`) VALUES (?,?,?);", [openId, 'image', mediaId]);
                     await mysql.query("INSERT INTO `wxserviceserver`.`media` (`mediaid`,`mediaPath`) VALUES (?,?);", [mediaId, mediaPath]);
                     request(picURL).pipe(fs.createWriteStream(mediaPath)).on('close', function (err) {
