@@ -2,14 +2,16 @@ var express = require('express');
 var crypto = require('crypto');
 var router = express.Router();
 const request = require('request')
-const path=require('path');
+const path = require('path');
 const qs = require('querystring');
 const parseString = require('xml2js').parseString;
-const fs=require("fs");
+const fs = require("fs");
+const md5 = crypto.createHash('md5');
 const config = require('../config');
 const msg = require("./wxMessage");
-const mysql=require("../module/");
+const mysql = require("../module/mysql");
 const wxAPI = require("./wxAPI");
+var formatDate = require('../module/formatDate');
 
 /*
  * 数据接入测试
@@ -41,7 +43,7 @@ router.get('/MessageProcess', (req, res, next) => {
     }
 });
 
-router.post('/MessageProcess', (req, res, next) => {
+router.post('/MessageProcess', function (req, res, next) {
 
     let buffer = [];
     req.on('data', function (data) {
@@ -50,7 +52,7 @@ router.post('/MessageProcess', (req, res, next) => {
     req.on('end', function () {
         let msgXml = Buffer.concat(buffer).toString('utf-8');
 
-        parseString(msgXml, { explicitArray: false }, (err, result) => {
+        parseString(msgXml, { explicitArray: false }, function (err, result) {
             if (err) throw err;
             result = result.xml;
             // console.log("xml解析结果：" + JSON.stringify(result));
@@ -58,7 +60,12 @@ router.post('/MessageProcess', (req, res, next) => {
             let fromUser = result.FromUserName;
             //回复普通消息
             if (result.MsgType === "text") {
-                res.send(msg.textMsg(toUser, fromUser, result.Content));
+                let getText = async (openid, text) => {
+                    await mysql.query("INSERT INTO `wxserviceserver`.`message` (`openid`, `messageType`, `messageText`) VALUES (?,?,?);", [openid, 'text', text]);
+                    res.send(msg.textMsg(toUser, fromUser, result.Content));
+                };
+
+                getText(result.FromUserName, result.Content);
             }
 
             //回复图片
@@ -74,13 +81,12 @@ router.post('/MessageProcess', (req, res, next) => {
                     res.send(resultXml);
                 });
                 */
-               
-                console.log( path.join(__dirname,'../'),process.cwd());
-                
-                request(result.PicUrl).pipe(fs.createWriteStream(`${process.cwd()}/public/uploads/${path.basename(result.PicUrl)}`)).on((err)=>{
-                    mysql
 
-                    res.status(200).body(resultXml);
+                let mediaPath = `${process.cwd()}/public/uploads/${Date.now().toString()}.jpg`;
+                mysql.query("INSERT INTO `wxserviceserver`.`message` (`openid`, `messageType`, `mediaid`) VALUES (?,?,?);", [result.FromUserName, 'image', result.MediaId]);
+                mysql.query("INSERT INTO `wxserviceserver`.`media` (`mediaid`,`mediaPath`) VALUES (?,?);", [result.MediaId, mediaPath]);
+                request(result.PicUrl).pipe(fs.createWriteStream(mediaPath)).on('close', function (err) {
+                    if (!err) { res.send("success"); } else { console.error(err) }
                 });
             }
 
@@ -116,11 +122,28 @@ router.post('/MessageProcess', (req, res, next) => {
                     if (result.EventKey) {
                         console.log('二维码信息:' + result.EventKey + result.Ticket);
                     }
-                    //获取用户信息并且保存到数据库中
-                    wxAPI.GetUserData(result.FromUserName).then((body) => {
-                        console.log(body);
-                    });
 
+                    //获取用户信息并且保存到数据库中
+                    let getUserBaseInfo = async (openid) => {
+                        let userBaseInfo = JSON.parse(await wxAPI.GetUserData(openid));
+                        let bExistInfo = await mysql.query("SELECT * FROM wxserviceserver.user WHERE openid=?;", openid);
+
+                        if (bExistInfo.results.length > 0) {
+                            await mysql.query("UPDATE `wxserviceserver`.`user` SET `nickname`=?,`subscribe`=?,`country`=?,`province`=?,`city`=?,`headimgurl`=?,`subscribe_time`=?,`remark`=? WHERE `openid`=?;",
+                                [userBaseInfo.nickname, userBaseInfo.subscribe, userBaseInfo.country, userBaseInfo.province, userBaseInfo.city, userBaseInfo.headimgurl, new Date(userBaseInfo.subscribe_time * 1000), userBaseInfo.remark, openid]).
+                                then((error, results,) => {
+                                    console.log(results);
+                                    console.log(error);
+                                });
+                        } else {
+                            await mysql.query("INSERT INTO `wxserviceserver`.`user` (`openid`,`nickname`,`subscribe`,`country`,`province`,`city`,`headimgurl`,`subscribe_time`,`remark`) VALUES (?,?,?,?,?,?,?,?,?);",
+                                [openid, userBaseInfo.nickname, userBaseInfo.subscribe, userBaseInfo.country, userBaseInfo.province, userBaseInfo.city, userBaseInfo.headimgurl, new Date(userBaseInfo.subscribe_time * 1000), userBaseInfo.remark]);
+                        }
+                    };
+
+                    getUserBaseInfo(result.FromUserName);
+
+                    //新关注用户回复信息
                     this.body = '终于等到你，还好我没放弃';
                 } else if (result.Event === 'unsubscribe') {
                     this.body = '';

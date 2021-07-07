@@ -223,16 +223,14 @@ function TemplateMessage() {
 function GetTempMedia(mediaId) {
     let options = {
         method: 'get',
-        url: config.wxAPI+"/media/get?access_token="+global.AccessToken+"&media_id="+mediaId
+        url: config.wxAPI + "/media/get?access_token=" + global.AccessToken + "&media_id=" + mediaId
     };
 
     return new Promise((resolve, reject) => {
         request.get(options, (err, res, body) => {
-            if(res)
-            {
+            if (res) {
                 resolve(body);
-            }else
-            {
+            } else {
                 reject(err);
             }
         });
@@ -242,17 +240,15 @@ function GetTempMedia(mediaId) {
 function GetMaterial(mediaId) {
     let options = {
         method: "post",
-        body:{"media_id":mediaId},
-        url: config.wxAPI+"/material/get_material?access_token="+global.AccessToken
+        body: { "media_id": mediaId },
+        url: config.wxAPI + "/material/get_material?access_token=" + global.AccessToken
     };
 
     return new Promise((resolve, reject) => {
         request.get(options, (err, res, body) => {
-            if(res)
-            {
+            if (res) {
                 resolve(body);
-            }else
-            {
+            } else {
                 reject(err);
             }
         });
@@ -284,4 +280,4 @@ function GetUserData(openId) {
     });
 }
 
-module.exports = { CreateMenu, GetAccessToken,GetTempMedia,GetMaterial,GetUserData};
+module.exports = { CreateMenu, GetAccessToken, GetTempMedia, GetMaterial, GetUserData };
