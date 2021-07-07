@@ -43,7 +43,7 @@ router.get('/MessageProcess', (req, res, next) => {
     }
 });
 
-router.post('/MessageProcess', function (req, res, next) {
+router.post('/MessageProcess', (req, res, next) => {
 
     let buffer = [];
     req.on('data', function (data) {
@@ -81,13 +81,21 @@ router.post('/MessageProcess', function (req, res, next) {
                     res.send(resultXml);
                 });
                 */
+                let getImage = async (openId, mediaId, picURL, res) => {
+                    let mediaPath = `${process.cwd()}/public/uploads/${Date.now().toString()}.jpg`;
+                    await mysql.query("INSERT INTO `wxserviceserver`.`message` (`openid`, `messageType`, `mediaid`) VALUES (?,?,?);", [openId, 'image', mediaId]);
+                    await mysql.query("INSERT INTO `wxserviceserver`.`media` (`mediaid`,`mediaPath`) VALUES (?,?);", [mediaId, mediaPath]);
+                    request(picURL).pipe(fs.createWriteStream(mediaPath)).on('close', function (err) {
+                        if (!err) {
+                            res.send("success");
+                        } else {
+                            console.error(err);
+                            res.send("系统出现错误！");
+                        }
+                    });
+                };
 
-                let mediaPath = `${process.cwd()}/public/uploads/${Date.now().toString()}.jpg`;
-                mysql.query("INSERT INTO `wxserviceserver`.`message` (`openid`, `messageType`, `mediaid`) VALUES (?,?,?);", [result.FromUserName, 'image', result.MediaId]);
-                mysql.query("INSERT INTO `wxserviceserver`.`media` (`mediaid`,`mediaPath`) VALUES (?,?);", [result.MediaId, mediaPath]);
-                request(result.PicUrl).pipe(fs.createWriteStream(mediaPath)).on('close', function (err) {
-                    if (!err) { res.send("success"); } else { console.error(err) }
-                });
+                getImage(result.FromUserName, result.MediaId, result.PicUrl, res);
             }
 
             //回复位置
