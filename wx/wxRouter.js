@@ -149,7 +149,30 @@ router.post('/MessageProcess', (req, res, next) => {
             }
             //回复视频
             if (result.MsgType === 'video') {
+                let getVideo = async (res, openID, mediaID, createTime) => {
+                    let currentTime = new Date();
+                    let mediaPath = `./public/uploads/${formatDate.format(currentTime, 'yyyy-MM-dd')}_${formatDate.format(currentTime, 'hh-mm-ss')}.mp4`;
 
+                    await mysql.query("INSERT INTO `wxserviceserver`.`message` (`openid`, `messageType`,`createTime`) VALUES (?,?,?);", [openID, 'video', formatDate.format(new Date(createTime * 1000), 'yyyy-MM-dd')]);
+                    await mysql.query("INSERT INTO `wxserviceserver`.`media` (`mediaid`,`mediaPath`) VALUES (?,?);", [mediaID, mediaPath]);
+
+                    axios({
+                        method: 'get',
+                        url: config.wxAPI + "/media/get?access_token=" + global.AccessToken + "&media_id=" + mediaID,
+                        responseType: 'stream'
+                    }).then((response) => {
+                        response.data.pipe(fs.createWriteStream(mediaPath)).on('close', (err) => {
+                            if (!err) {
+                                res.send("success");
+                            } else {
+                                console.error(err);
+                                res.send("系统出现错误！");
+                            }
+                        });
+                    });
+                }
+
+                getVideo(res, result.FromUserName, result.MediaId, result.CreateTime);
             }
             //回复小视频
             if (result.MsgType === 'shortvideo') {
@@ -163,7 +186,7 @@ router.post('/MessageProcess', (req, res, next) => {
             if (result.MsgType === 'event') {
                 if (result.Event === 'subscribe') {
                     //用户关注
-                    console.log('新用户:' + result.FromUserName + '于' + result.CreateTime + "关注");
+                    console.log('新用户:' + result.FromUserName + '于' + formatDate.format(new Date(result.CreateTime * 1000)) + "关注");
 
                     //未关注用户通过扫码关注
                     if (result.EventKey) {
@@ -172,19 +195,15 @@ router.post('/MessageProcess', (req, res, next) => {
 
                     //获取用户信息并且保存到数据库中
                     let getUserBaseInfo = async (openid) => {
-                        let userBaseInfo = JSON.parse(await wxAPI.GetUserData(openid));
+                        let userBaseInfo = await wxAPI.GetUserData(openid);
                         let bExistInfo = await mysql.query("SELECT * FROM wxserviceserver.user WHERE openid=?;", openid);
 
                         if (bExistInfo.results.length > 0) {
                             await mysql.query("UPDATE `wxserviceserver`.`user` SET `nickname`=?,`subscribe`=?,`country`=?,`province`=?,`city`=?,`headimgurl`=?,`subscribe_time`=?,`remark`=? WHERE `openid`=?;",
-                                [userBaseInfo.nickname, userBaseInfo.subscribe, userBaseInfo.country, userBaseInfo.province, userBaseInfo.city, userBaseInfo.headimgurl, new Date(userBaseInfo.subscribe_time * 1000), userBaseInfo.remark, openid]).
-                                then((error, results,) => {
-                                    console.log(results);
-                                    console.log(error);
-                                });
+                                [userBaseInfo.nickname, userBaseInfo.subscribe, userBaseInfo.country, userBaseInfo.province, userBaseInfo.city, userBaseInfo.headimgurl, new Date(userBaseInfo.subscribe_time * 1000), userBaseInfo.remark, openid]).catch(err => { console.error(err); });
                         } else {
                             await mysql.query("INSERT INTO `wxserviceserver`.`user` (`openid`,`nickname`,`subscribe`,`country`,`province`,`city`,`headimgurl`,`subscribe_time`,`remark`) VALUES (?,?,?,?,?,?,?,?,?);",
-                                [openid, userBaseInfo.nickname, userBaseInfo.subscribe, userBaseInfo.country, userBaseInfo.province, userBaseInfo.city, userBaseInfo.headimgurl, new Date(userBaseInfo.subscribe_time * 1000), userBaseInfo.remark]);
+                                [openid, userBaseInfo.nickname, userBaseInfo.subscribe, userBaseInfo.country, userBaseInfo.province, userBaseInfo.city, userBaseInfo.headimgurl, new Date(userBaseInfo.subscribe_time * 1000), userBaseInfo.remark]).catch(err => { console.error(err); });
                         }
                     };
 
