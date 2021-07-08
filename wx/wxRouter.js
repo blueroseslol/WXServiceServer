@@ -1,12 +1,12 @@
 var express = require('express');
 var crypto = require('crypto');
 var router = express.Router();
+const axios = require('axios')
 const request = require('request')
 const path = require('path');
-const qs = require('querystring');
 const parseString = require('xml2js').parseString;
 const fs = require("fs");
-const md5 = crypto.createHash('md5');
+// const md5 = crypto.createHash('md5');
 const config = require('../config');
 const msg = require("./wxMessage");
 const mysql = require("../module/mysql");
@@ -60,12 +60,13 @@ router.post('/MessageProcess', (req, res, next) => {
             let fromUser = result.FromUserName;
             //回复普通消息
             if (result.MsgType === "text") {
-                let getText = async (openid, text) => {
-                    await mysql.query("INSERT INTO `wxserviceserver`.`message` (`openid`, `messageType`, `messageText`) VALUES (?,?,?);", [openid, 'text', text]);
+                let getText = async (res, openid, text, createTime) => {
+                    await mysql.query("INSERT INTO `wxserviceserver`.`message` (`openid`, `messageType`, `messageText`,`createTime`) VALUES (?,?,?,?);", [openid, 'text', text, formatDate.format(new Date(createTime * 1000), 'yyyy-MM-dd')]);
+
                     res.send(msg.textMsg(toUser, fromUser, result.Content));
                 };
 
-                getText(result.FromUserName, result.Content);
+                getText(res, result.FromUserName, result.Content, result.CreateTime);
             }
 
             //回复图片
@@ -81,10 +82,10 @@ router.post('/MessageProcess', (req, res, next) => {
                     res.send(resultXml);
                 });
                 */
-                let getImage = async (openId, mediaId, picURL, res) => {
+                let getImage = async (res, openId, mediaId, picURL, createTime) => {
                     let mediaPath = `./public/uploads/${Date.now().toString()}.jpg`;
 
-                    await mysql.query("INSERT INTO `wxserviceserver`.`message` (`openid`, `messageType`, `mediaid`) VALUES (?,?,?);", [openId, 'image', mediaId]);
+                    await mysql.query("INSERT INTO `wxserviceserver`.`message` (`openid`, `messageType`, `mediaid`,`createTime`) VALUES (?,?,?,?);", [openId, 'image', mediaId, formatDate.format(new Date(createTime * 1000), 'yyyy-MM-dd')]);
                     await mysql.query("INSERT INTO `wxserviceserver`.`media` (`mediaid`,`mediaPath`) VALUES (?,?);", [mediaId, mediaPath]);
                     request(picURL).pipe(fs.createWriteStream(mediaPath)).on('close', function (err) {
                         if (!err) {
@@ -96,18 +97,48 @@ router.post('/MessageProcess', (req, res, next) => {
                     });
                 };
 
-                getImage(result.FromUserName, result.MediaId, result.PicUrl, res);
+                getImage(res, result.FromUserName, result.MediaId, result.PicUrl, result.CreateTime);
             }
 
             //回复位置
             if (result.MsgType === 'location') {
-                console.log(result.Label + result.Location_X + result.Location_Y + result.Scale);
-                res.send(msg.textMsg(toUser, fromUser, "发送位置：" + result.Label + "坐标X：" + result.Location_X + "坐标Y：" + result.Location_Y));
+                // console.log(result.Label + result.Location_X + result.Location_Y + result.Scale);
+                let getLocation = async (res, openId, label, locationX, locationY, createTime) => {
+                    await mysql.query("INSERT INTO `wxserviceserver`.`message` (`openid`, `messageType`,`messageText`,`createTime`) VALUES (?,?,?,?);", [openId, 'location', `${label}@${locationX}:${locationY}`, formatDate.format(new Date(createTime * 1000), 'yyyy-MM-dd')]);
+
+                    res.send("success")
+                };
+
+                getLocation(res, result.FromUserName, result.Label, result.Location_X, result.Location_Y, result.CreateTime);
             }
 
             //回复语音
             if (result.MsgType === 'voice') {
+                //下载语音文件并且获取文字转化结果
 
+                let getVoice = async (res, openID, mediaID, format, recognition, createTime) => {
+                    let options = {
+                        method: 'get',
+                        url: config.wxAPI + "/media/get?access_token=" + global.AccessToken + "&media_id=" + mediaID
+                    };
+                    let mediaPath = `./public/uploads/${Date.now().toString()}.${format}`;
+
+                    await mysql.query("INSERT INTO `wxserviceserver`.`message` (`openid`, `messageType`,`messageText`,`createTime`) VALUES (?,?,?,?);", [openID, 'voice', `语音识别结果：${recognition}`, formatDate.format(new Date(createTime * 1000), 'yyyy-MM-dd')]);
+                    await mysql.query("INSERT INTO `wxserviceserver`.`media` (`mediaid`,`mediaPath`) VALUES (?,?);", [mediaID, mediaPath]);
+
+                    request.get(options).pipe(fs.createWriteStream(mediaPath)).on('close', function (err) {
+                        if (!err) {
+
+
+                            res.send("success");
+                        } else {
+                            console.error(err);
+                            res.send("系统出现错误！");
+                        }
+                    });
+                };
+
+                getVoice(res, result.FromUserName, result.MediaId, result.Format, result.Recognition, result.CreateTime);
             }
             //回复视频
             if (result.MsgType === 'video') {
