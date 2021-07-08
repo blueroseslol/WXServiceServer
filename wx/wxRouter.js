@@ -1,9 +1,8 @@
 var express = require('express');
 var crypto = require('crypto');
 var router = express.Router();
-const axios = require('axios')
-const request = require('request')
-const path = require('path');
+const axios = require('axios');
+// const path = require('path');
 const parseString = require('xml2js').parseString;
 const fs = require("fs");
 // const md5 = crypto.createHash('md5');
@@ -11,7 +10,7 @@ const config = require('../config');
 const msg = require("./wxMessage");
 const mysql = require("../module/mysql");
 const wxAPI = require("./wxAPI");
-var formatDate = require('../module/formatDate');
+const formatDate = require('../module/formatDate');
 
 /*
  * 数据接入测试
@@ -83,17 +82,25 @@ router.post('/MessageProcess', (req, res, next) => {
                 });
                 */
                 let getImage = async (res, openId, mediaId, picURL, createTime) => {
-                    let mediaPath = `./public/uploads/${Date.now().toString()}.jpg`;
+                    let currentTime = new Date();
+                    let mediaPath = `./public/uploads/${formatDate.format(currentTime, 'yyyy-MM-dd')}_${formatDate.format(currentTime, 'hh-mm-ss')}.jpg`;
 
                     await mysql.query("INSERT INTO `wxserviceserver`.`message` (`openid`, `messageType`, `mediaid`,`createTime`) VALUES (?,?,?,?);", [openId, 'image', mediaId, formatDate.format(new Date(createTime * 1000), 'yyyy-MM-dd')]);
                     await mysql.query("INSERT INTO `wxserviceserver`.`media` (`mediaid`,`mediaPath`) VALUES (?,?);", [mediaId, mediaPath]);
-                    request(picURL).pipe(fs.createWriteStream(mediaPath)).on('close', function (err) {
-                        if (!err) {
-                            res.send("success");
-                        } else {
-                            console.error(err);
-                            res.send("系统出现错误！");
-                        }
+
+                    axios({
+                        method: 'get',
+                        url: picURL,
+                        responseType: 'stream'
+                    }).then((response) => {
+                        response.data.pipe(fs.createWriteStream(mediaPath)).on('close', (err) => {
+                            if (!err) {
+                                res.send("success");
+                            } else {
+                                console.error(err);
+                                res.send("系统出现错误！");
+                            }
+                        });
                     });
                 };
 
@@ -115,26 +122,26 @@ router.post('/MessageProcess', (req, res, next) => {
             //回复语音
             if (result.MsgType === 'voice') {
                 //下载语音文件并且获取文字转化结果
-
                 let getVoice = async (res, openID, mediaID, format, recognition, createTime) => {
-                    let options = {
-                        method: 'get',
-                        url: config.wxAPI + "/media/get?access_token=" + global.AccessToken + "&media_id=" + mediaID
-                    };
-                    let mediaPath = `./public/uploads/${Date.now().toString()}.${format}`;
+                    let currentTime = new Date();
+                    let mediaPath = `./public/uploads/${formatDate.format(currentTime, 'yyyy-MM-dd')}_${formatDate.format(currentTime, 'hh-mm-ss')}.${format}`;
 
                     await mysql.query("INSERT INTO `wxserviceserver`.`message` (`openid`, `messageType`,`messageText`,`createTime`) VALUES (?,?,?,?);", [openID, 'voice', `语音识别结果：${recognition}`, formatDate.format(new Date(createTime * 1000), 'yyyy-MM-dd')]);
                     await mysql.query("INSERT INTO `wxserviceserver`.`media` (`mediaid`,`mediaPath`) VALUES (?,?);", [mediaID, mediaPath]);
 
-                    request.get(options).pipe(fs.createWriteStream(mediaPath)).on('close', function (err) {
-                        if (!err) {
-
-
-                            res.send("success");
-                        } else {
-                            console.error(err);
-                            res.send("系统出现错误！");
-                        }
+                    axios({
+                        method: 'get',
+                        url: config.wxAPI + "/media/get?access_token=" + global.AccessToken + "&media_id=" + mediaID,
+                        responseType: 'stream'
+                    }).then((response) => {
+                        response.data.pipe(fs.createWriteStream(mediaPath)).on('close', (err) => {
+                            if (!err) {
+                                res.send("success");
+                            } else {
+                                console.error(err);
+                                res.send("系统出现错误！");
+                            }
+                        });
                     });
                 };
 

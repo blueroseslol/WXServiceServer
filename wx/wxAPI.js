@@ -1,4 +1,5 @@
 const request = require('request')
+const axios = require('axios');
 const qs = require('querystring');
 const config = require('../config');
 const fs = require('fs');
@@ -7,34 +8,23 @@ const fs = require('fs');
  * 根据appid,secret获取access_token
  */
 function GetAccessToken() {
-    let reqUrl = config.wxAPI + '/token?';
-    let params = {
-        grant_type: 'client_credential',
-        appid: config.appId,
-        secret: config.appSecret
-    };
-
-    let options = {
-        method: 'get',
-        url: reqUrl + qs.stringify(params)
-    };
-    // console.log("GetAccessToken()=>RequestUrl:", options.url);
-
     return new Promise((resolve, reject) => {
-        request(options, (err, res, body) => {
-            if (res) {
-                let token = JSON.parse(body);
-                token.get_time = new Date();
-                console.log("GetAccessToken()=>Result:", body);
-
-                global.AccessToken = token.access_token;
-                // console.log("GlobalVariable:", global.AccessToken);
-                // fs.writeFile('./token', JSON.stringify(token), function (err) { console.error(err) });
-
-                resolve(token.access_token);
-            } else {
-                reject(err);
+        axios({
+            method: 'get',
+            url: `${config.wxAPI}/token?`,
+            params: {
+                grant_type: 'client_credential',
+                appid: config.appId,
+                secret: config.appSecret
             }
+        }).then((response) => {
+            if (response) {
+                console.log("GetAccessToken()=>Result:", response.data.access_token);
+                global.AccessToken = response.data.access_token;
+                resolve(response.data);
+            }
+        }).catch((err) => {
+            reject(err);
         });
     });
 }
@@ -112,20 +102,19 @@ let menus = {
  */
 //创建微信菜单
 function CreateMenu() {
-    let options = {
-        url: config.wxAPI + '/menu/create?access_token=' + global.AccessToken,
-        form: JSON.stringify(menus),
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-        }
-    };
-
-    request.post(options, (err, res, body) => {
-        if (err) {
-            console.error("CreateMenu:", err)
-        } else {
-            console.log("CreateMenu():", body);
-        }
+    return new Promise((resolve, reject) => {
+        axios({
+            method: 'post',
+            url: `${config.wxAPI}/menu/create?access_token=${global.AccessToken}`,
+            data: menus,
+            // headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        }).then((response) => {
+            console.log("CreateMenu():", response.data);
+            resolve(response.data);
+        }).catch((err) => {
+            console.error("CreateMenu:", err);
+            reject(err);
+        });
     });
 }
 
@@ -134,29 +123,7 @@ function CreateMenu() {
 /*
  * 增加客服
  */
-function AddCustomerService() {
-    let temp = {
-        "kf_account": "123456",
-        "nickname": "客服1",
-        "password": "123456"
-    }
-
-    let options = {
-        url: config.wxAPI + '/customservice/kfaccount/add?access_token=' + global.AccessToken,
-        form: JSON.stringify(temp),
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-        }
-    };
-
-    request.post(options, (err, res, body) => {
-        if (err) {
-            console.error("AddCustomerService:", err)
-        } else {
-            console.log("AddCustomerService():", body);
-        }
-    });
-}
+function AddCustomerService() { }
 
 /*
  * 模板信息
@@ -221,36 +188,27 @@ function TemplateMessage() {
  * 通过mediaId来获取资源
  */
 function GetTempMedia(mediaId) {
-    let options = {
-        method: 'get',
-        url: config.wxAPI + "/media/get?access_token=" + global.AccessToken + "&media_id=" + mediaId
-    };
-
     return new Promise((resolve, reject) => {
-        request.get(options, (err, res, body) => {
-            if (res) {
-                resolve(body);
-            } else {
-                reject(err);
-            }
+        axios({
+            method: 'get',
+            url: `${config.wxAPI}/media/get?access_token=${global.AccessToken}&media_id=${mediaId}`,
+        }).then((response) => {
+            resolve(response.data);
+        }).catch((err) => {
+            reject(err);
         });
     });
 }
 
 function GetMaterial(mediaId) {
-    let options = {
-        method: "post",
-        body: { "media_id": mediaId },
-        url: config.wxAPI + "/material/get_material?access_token=" + global.AccessToken
-    };
-
     return new Promise((resolve, reject) => {
-        request.get(options, (err, res, body) => {
-            if (res) {
-                resolve(body);
-            } else {
-                reject(err);
-            }
+        axios({
+            method: 'post',
+            url: `${config.wxAPI}/material/get_material?access_token=${global.AccessToken}&media_id=${mediaId}`,
+        }).then((response) => {
+            resolve(response.data);
+        }).catch((err) => {
+            reject(err);
         });
     });
 }
@@ -259,23 +217,14 @@ function GetMaterial(mediaId) {
  * 用户管理
  */
 function GetUserData(openId) {
-    let options = {
-        url: config.wxAPI + '/user/info?access_token=' + global.AccessToken + "&openid=" + openId + "&lang=zh_CN",
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-        }
-    };
-    //console.log("GetUserData()=>RequestUrl:", options.url);
-
     return new Promise((resolve, reject) => {
-        request(options, function (err, res, body) {
-            if (res) {
-                //参数见
-                //https://developers.weixin.qq.com/doc/offiaccount/User_Management/Get_users_basic_information_UnionID.html#UinonId
-                resolve(body);
-            } else {
-                reject(err);
-            }
+        axios({
+            method: 'get',
+            url: `${config.wxAPI}/user/info?access_token=${global.AccessToken}&openid=${openId}&lang=zh_CN`,
+        }).then((response) => {
+            resolve(response.data);
+        }).catch((err) => {
+            reject(err);
         });
     });
 }

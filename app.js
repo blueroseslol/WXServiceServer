@@ -12,8 +12,6 @@ var wxAPI = require("./wx/wxAPI");
 
 wxAPI.GetAccessToken().then(() => {
   wxAPI.CreateMenu();
-}).then(() => {
-
 });
 
 //定时获取AccessToken
