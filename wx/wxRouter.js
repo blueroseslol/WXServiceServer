@@ -11,6 +11,14 @@ const msg = require("./wxMessage");
 const mysql = require("../module/mysql");
 const wxAPI = require("./wxAPI");
 const formatDate = require('../module/formatDate');
+//docx 系列
+const docx = require("docx");
+const Document = docx.Document;
+const Packer = docx.Packer;
+const Paragraph = docx.Paragraph;
+const TextRun = docx.TextRun;
+const ImageRun = docx.ImageRun;
+
 
 /*
  * 数据接入测试
@@ -43,7 +51,6 @@ router.get('/MessageProcess', (req, res, next) => {
 });
 
 router.post('/MessageProcess', (req, res, next) => {
-
     let buffer = [];
     req.on('data', function (data) {
         buffer.push(data);
@@ -230,6 +237,94 @@ router.post('/MessageProcess', (req, res, next) => {
             }
         });
     });
+});
+
+router.get('/GenerateDoc', (req, res, next) => {
+    let GenerateDoc = async () => {
+        //收集各个用户的信息
+        let bTimeRange = false;
+        if (req.query.startTime && req.query.endTime) {
+            let startTime = new Date(req.query.startTime);
+            let endTime = new Date(req.query.endTime);
+            bTimeRange = true;
+        }
+
+        let usersArray = (await mysql.query("SELECT * FROM wxserviceserver.user;")).results;
+        for (let index in usersArray) {
+            let openid = usersArray[index].openid;
+            let nickname = usersArray[index].nickname;
+            let province = usersArray[index].province;
+            let city = usersArray[index].city;
+            let subscribe_time = usersArray[index].subscribe_time;
+
+            let messageArray = (await mysql.query("SELECT * FROM wxserviceserver.message where openid=?;", openid)).results;
+
+            let title = new Paragraph({
+                children: [
+                    new TextRun(`${province}-${city}的${nickname}`),
+                ],
+            })
+
+            let paragraphArray = [];
+            paragraphArray.push(title);
+            for (let index in messageArray) {
+                let messageType = messageArray[index].messageType;
+                let messageText = messageArray[index].messageText;
+                let mediaid = messageArray[index].mediaid;
+                let createTime = formatDate.format(new Date(messageArray[index].createTime), 'yyyy-MM-dd');
+
+                if (messageType == "text") {
+                    paragraphArray.push(new Paragraph({
+                        children: [
+                            new TextRun(`${messageText} ${createTime}`),
+                        ]
+                    }));
+                } else if (messageType == "image") {
+                    let mediaPath = (await mysql.query("SELECT * FROM wxserviceserver.media where mediaid=?;", mediaid)).results[0].mediaPath;
+                    paragraphArray.push(new Paragraph({
+                        children: [
+                            new ImageRun({
+                                data: fs.readFileSync(mediaPath),
+                                transformation: {
+                                    width: 200,
+                                    height: 200,
+                                }
+                            })]
+                    }));
+
+                } else if (messageType == "voice") {
+                    paragraphArray.push(new Paragraph({
+                        children: [
+                            new TextRun(`发送声音信息：${messageText} ${createTime}`),
+                        ]
+                    }));
+                } else if (messageType == "video") {
+
+                } else if (messageType == "location") {
+                    paragraphArray.push(new Paragraph({
+                        children: [
+                            new TextRun(`发送位置信息：${messageText} ${createTime}`),
+                        ]
+                    }));
+                }
+            }
+
+            let doc = new Document({
+                sections: [{
+                    properties: {},
+                    children: paragraphArray
+                }]
+            });
+
+            // Used to export the file into a .docx file
+            Packer.toBuffer(doc).then((buffer) => {
+                fs.writeFileSync(`./public/${province}-${city}-${nickname}.docx`, buffer);
+            });
+        }
+    }
+
+    GenerateDoc();
+    res.sendStatus(200);
 });
 
 module.exports = router;

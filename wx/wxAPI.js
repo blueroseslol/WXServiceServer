@@ -1,6 +1,4 @@
-const request = require('request')
 const axios = require('axios');
-const qs = require('querystring');
 const config = require('../config');
 const fs = require('fs');
 
@@ -130,57 +128,55 @@ function AddCustomerService() { }
  */
 //发送模板信息
 function TemplateMessage() {
-    let temp = {
-        "touser": "OPENID",
-        "template_id": "JZiSU5Om3JBfaIJ8tN7U5odPgG7FzoRGTgk4ANBYQkE",
-        "url": "http://weixin.qq.com/download",
-        "topcolor": "#FF0000",
-        "data": {
-            "User": {
-                "value": "黄先生",
-                "color": "#173177"
-            },
-            "Date": {
-                "value": "06月07日 19时24分",
-                "color": "#173177"
-            },
-            "CardNumber": {
-                "value": "0426",
-                "color": "#173177"
-            },
-            "Type": {
-                "value": "消费",
-                "color": "#173177"
-            },
-            "Money": {
-                "value": "人民币260.00元",
-                "color": "#173177"
-            },
-            "DeadTime": {
-                "value": "06月07日19时24分",
-                "color": "#173177"
-            },
-            "Left": {
-                "value": "6504.09",
-                "color": "#173177"
+    return new Promise((resolve, reject) => {
+        let temp = {
+            "touser": "OPENID",
+            "template_id": "JZiSU5Om3JBfaIJ8tN7U5odPgG7FzoRGTgk4ANBYQkE",
+            "url": "http://weixin.qq.com/download",
+            "topcolor": "#FF0000",
+            "data": {
+                "User": {
+                    "value": "黄先生",
+                    "color": "#173177"
+                },
+                "Date": {
+                    "value": "06月07日 19时24分",
+                    "color": "#173177"
+                },
+                "CardNumber": {
+                    "value": "0426",
+                    "color": "#173177"
+                },
+                "Type": {
+                    "value": "消费",
+                    "color": "#173177"
+                },
+                "Money": {
+                    "value": "人民币260.00元",
+                    "color": "#173177"
+                },
+                "DeadTime": {
+                    "value": "06月07日19时24分",
+                    "color": "#173177"
+                },
+                "Left": {
+                    "value": "6504.09",
+                    "color": "#173177"
+                }
             }
-        }
-    }
+        };
 
-    let options = {
-        url: config.wxAPI + '/message/template/send?access_token=' + global.AccessToken,
-        form: JSON.stringify(temp),
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-        }
-    };
-
-    request.post(options, function (err, res, body) {
-        if (err) {
-            console.error("TemplateMessage:", err)
-        } else {
-            console.log("TemplateMessage():", body);
-        }
+        axios({
+            method: 'post',
+            url: `${config.wxAPI}/message/template/send?access_token=${global.AccessToken}`,
+            data: temp
+        }).then((response) => {
+            // console.error("TemplateMessage:", response)
+            resolve(response.data);
+        }).catch((err) => {
+            // console.log("TemplateMessage():", err);
+            reject(err);
+        });
     });
 }
 
