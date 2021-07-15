@@ -1,11 +1,10 @@
 var express = require('express');
-var crypto = require('crypto');
 var router = express.Router();
 const axios = require('axios');
 // const path = require('path');
-const parseString = require('xml2js').parseString;
+const xml2js = require('xml2js');
+const parseString = xml2js.parseString;
 const fs = require("fs");
-// const md5 = crypto.createHash('md5');
 const config = require('../config');
 const msg = require("./wxMessage");
 const mysql = require("../module/mysql");
@@ -19,35 +18,24 @@ const Paragraph = docx.Paragraph;
 const TextRun = docx.TextRun;
 const ImageRun = docx.ImageRun;
 
-
-/*
- * 数据接入测试
- */
-function CheckSignature(query) {
-    let signature = query.signature;
-    let timestamp = query.timestamp;
-    let nonce = query.nonce;
-
-    let tmpArr = [config.token, timestamp, nonce];
-    let tempStr = tmpArr.sort().join('');
-    let result = crypto.createHash('sha1').update(tempStr.toString().replace(/,/g, ""), 'utf-8').digest('hex');
-
-    if (result == signature) {
-        return true;
-    } else {
-        return false;
-    }
-}
-
 router.get('/MessageProcess', (req, res, next) => {
     //若确认此次GET请求来自微信服务器，请原样返回echostr参数内容，则接入生效，成为开发者成功，否则接入失败。
     // console.log(req.query.signature, req.query.timestamp, req.query.nonce, req.query.echostr);
 
-    if (CheckSignature(req.query)) {
+    if (wxAPI.CheckSignature(req.query)) {
         res.send(req.query.echostr);
     } else {
         res.send(false);
     }
+});
+
+router.put('/UpdateUserDate', (req, res, next) => {
+    let getText = async (res, openid, contact, submitting_unit) => {
+        await mysql.query("UPDATE `wxserviceserver`.`user` SET `contact`=?,`submitting_unit`=? WHERE `openid`=?;", [contact, submitting_unit, openid]);
+        res.sendStatus(200);
+    };
+
+    getText(res, req.query.openid, req.query.contact, req.query.submitting_unit);
 });
 
 router.post('/MessageProcess', (req, res, next) => {
@@ -69,7 +57,22 @@ router.post('/MessageProcess', (req, res, next) => {
                 let getText = async (res, openid, text, createTime) => {
                     await mysql.query("INSERT INTO `wxserviceserver`.`message` (`openid`, `messageType`, `messageText`,`createTime`) VALUES (?,?,?,?);", [openid, 'text', text, formatDate.format(new Date(createTime * 1000), 'yyyy-MM-dd')]);
 
-                    res.send(msg.textMsg(toUser, fromUser, result.Content));
+                    //发送文字消息
+                    res.send(msg.textMsg(fromUser, toUser, result.Content));
+
+                    //转接客服
+                    // res.send(msg.transferCustomerService(fromUser, toUser, result.Content));
+
+                    //发送图文信息
+                    /*
+                    var contentArr = [
+                        { Title: "Node.js 微信自定义菜单", Description: "使用Node.js实现自定义微信菜单", PicUrl: "http://img.blog.csdn.net/20170605162832842?watermark/2/text/aHR0cDovL2Jsb2cuY3Nkbi5uZXQvaHZrQ29kZXI=/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70/gravity/SouthEast", Url: "http://blog.csdn.net/hvkcoder/article/details/72868520" },
+                        { Title: "Node.js access_token的获取、存储及更新", Description: "Node.js access_token的获取、存储及更新", PicUrl: "http://img.blog.csdn.net/20170528151333883?watermark/2/text/aHR0cDovL2Jsb2cuY3Nkbi5uZXQvaHZrQ29kZXI=/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70/gravity/SouthEast", Url: "http://blog.csdn.net/hvkcoder/article/details/72783631" },
+                        { Title: "Node.js 接入微信公众平台开发", Description: "Node.js 接入微信公众平台开发", PicUrl: "http://img.blog.csdn.net/20170605162832842?watermark/2/text/aHR0cDovL2Jsb2cuY3Nkbi5uZXQvaHZrQ29kZXI=/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70/gravity/SouthEast", Url: "http://blog.csdn.net/hvkcoder/article/details/72765279" }
+                    ];
+                    reportMsg = msg.graphicMsg(fromUser, toUser, contentArr);
+                    res.send(reportMsg);
+                    */
                 };
 
                 getText(res, result.FromUserName, result.Content, result.CreateTime);

@@ -1,6 +1,7 @@
 const axios = require('axios');
 const config = require('../config');
 const fs = require('fs');
+var crypto = require('crypto');
 
 /*
  * 根据appid,secret获取access_token
@@ -25,6 +26,25 @@ function GetAccessToken() {
             reject(err);
         });
     });
+}
+
+/*
+ * 数据接入签名检测
+ */
+function CheckSignature(query) {
+    let signature = query.signature;
+    let timestamp = query.timestamp;
+    let nonce = query.nonce;
+
+    let tmpArr = [config.token, timestamp, nonce];
+    let tempStr = tmpArr.sort().join('');
+    let result = crypto.createHash('sha1').update(tempStr.toString().replace(/,/g, ""), 'utf-8').digest('hex');
+
+    if (result == signature) {
+        return true;
+    } else {
+        return false;
+    }
 }
 
 let menus = {
@@ -225,4 +245,4 @@ function GetUserData(openId) {
     });
 }
 
-module.exports = { CreateMenu, GetAccessToken, GetTempMedia, GetMaterial, GetUserData };
+module.exports = { CreateMenu, GetAccessToken, CheckSignature, GetTempMedia, GetMaterial, GetUserData };
