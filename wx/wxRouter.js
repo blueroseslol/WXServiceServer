@@ -57,6 +57,8 @@ router.post('/MessageProcess', (req, res, next) => {
                 let getText = async (res, openid, text, createTime) => {
                     await mysql.query("INSERT INTO `wxserviceserver`.`message` (`openid`, `messageType`, `messageText`,`createTime`) VALUES (?,?,?,?);", [openid, 'text', text, formatDate.format(new Date(createTime * 1000), 'yyyy-MM-dd')]);
 
+                    //模板消息实现
+                    wxAPI.TemplateMessage(openid).catch(err => { console.log(err) });
                     //发送文字消息
                     res.send(msg.textMsg(fromUser, toUser, result.Content));
 

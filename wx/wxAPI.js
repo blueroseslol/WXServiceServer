@@ -147,10 +147,10 @@ function AddCustomerService() { }
  * 模板信息
  */
 //发送模板信息
-function TemplateMessage() {
+function TemplateMessage(openid) {
     return new Promise((resolve, reject) => {
         let temp = {
-            "touser": "OPENID",
+            "touser": openid,
             "template_id": "JZiSU5Om3JBfaIJ8tN7U5odPgG7FzoRGTgk4ANBYQkE",
             "url": "http://weixin.qq.com/download",
             "topcolor": "#FF0000",
@@ -191,10 +191,8 @@ function TemplateMessage() {
             url: `${config.wxAPI}/message/template/send?access_token=${global.AccessToken}`,
             data: temp
         }).then((response) => {
-            // console.error("TemplateMessage:", response)
             resolve(response.data);
         }).catch((err) => {
-            // console.log("TemplateMessage():", err);
             reject(err);
         });
     });
@@ -245,4 +243,4 @@ function GetUserData(openId) {
     });
 }
 
-module.exports = { CreateMenu, GetAccessToken, CheckSignature, GetTempMedia, GetMaterial, GetUserData };
+module.exports = { CreateMenu, GetAccessToken, CheckSignature, TemplateMessage, GetTempMedia, GetMaterial, GetUserData };
