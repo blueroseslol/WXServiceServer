@@ -1,7 +1,7 @@
 var express = require('express');
 var router = express.Router();
 const axios = require('axios');
-// const path = require('path');
+const path = require('path');
 const xml2js = require('xml2js');
 const parseString = xml2js.parseString;
 const fs = require("fs");
@@ -10,6 +10,9 @@ const msg = require("./wxMessage");
 const mysql = require("../module/mysql");
 const wxAPI = require("./wxAPI");
 const formatDate = require('../module/formatDate');
+//zip 打包
+let zlib = require('zlib');
+let archiver = require('archiver');
 //docx 系列
 const docx = require("docx");
 const Document = docx.Document;
@@ -17,6 +20,165 @@ const Packer = docx.Packer;
 const Paragraph = docx.Paragraph;
 const TextRun = docx.TextRun;
 const ImageRun = docx.ImageRun;
+
+router.get('/GetMessageFile', (req, res, next) => {
+    let Package = async function (req, res, output) {
+        //压缩文件
+        let archive = archiver('zip', {
+            zlib: { level: 9 }
+        });
+
+        var output = fs.createWriteStream("./public/WeChatMessage.zip");
+
+        //实现下载URL功能，不过可以被archive.pipe(res);代替
+        /*
+        output.on('close', function () {
+            console.log(archive.pointer() + ' total bytes');
+            console.log('archiver has been finalized and the output file descriptor has closed.');
+
+            res.setHeader('Content-type', 'application/octet-stream');
+            res.setHeader('Content-Disposition', 'attachment;filename=WeChatMessage.zip');
+            fs.readFile('./public/WeChatMessage.zip', (err, data) => {
+                res.writeHead(200, {
+                    'Content-Type': 'application/zip',
+                    'Content-disposition': 'attachment;filename=WeChatMessage.zip',
+                    'Content-Length': data.length
+                });
+                res.end(Buffer.from(data, 'binary'));
+            });
+        });
+        */
+
+        archive.on('progress', function (progress) { });
+        archive.on('warning', function (err) {
+            if (err.code === 'ENOENT') {
+                console.error("压缩出错：", err);
+            } else {
+                throw err;
+            }
+        });
+
+        archive.on('error', (err) => {
+            console.error("压缩出错：", err);
+        });
+
+        archive.pipe(res);
+
+        //生成Word文档
+        let usersQueryResult;
+        if (req.query.openid) {
+            usersQueryResult = await mysql.query("SELECT * FROM wxserviceserver.user where openid=?;", req.query.openid);
+        } else {
+            usersQueryResult = await mysql.query("SELECT * FROM wxserviceserver.user;");
+        }
+
+        let usersInfoArray = usersQueryResult.results;
+
+        for (let index in usersInfoArray) {
+            let openid = usersInfoArray[index].openid;
+            let nickname = usersInfoArray[index].nickname;
+            let province = usersInfoArray[index].province;
+            let city = usersInfoArray[index].city;
+            let contact = usersInfoArray[index].contact;
+            let submitting_unit = usersInfoArray[index].submitting_unit;
+            // let subscribe_time = usersArray[index].subscribe_time;
+            let FoderName = `${province}-${city}-${nickname}`;
+
+            let messageArray = (await mysql.query("SELECT * FROM wxserviceserver.message where openid=?;", openid)).results;
+
+            let title = new Paragraph({
+                children: [
+                    new TextRun(`${province}-${city}的${nickname} 联系人：${contact} 联系单位：${submitting_unit}`),
+                ],
+            })
+
+            let paragraphArray = [];
+            paragraphArray.push(title);
+            for (let index in messageArray) {
+                let messageType = messageArray[index].messageType;
+                let messageText = messageArray[index].messageText;
+                let mediaid = messageArray[index].mediaid;
+                let createTime = formatDate.format(new Date(messageArray[index].createTime), 'yyyy-MM-dd');
+
+                if (messageType == "text") {
+                    paragraphArray.push(new Paragraph({
+                        children: [
+                            new TextRun(`${messageText} ${createTime}`),
+                        ]
+                    }));
+                } else if (messageType == "image") {
+                    let mediaPath = (await mysql.query("SELECT * FROM wxserviceserver.media where mediaid=?;", mediaid)).results[0].mediaPath;
+                    let fileName = path.basename(mediaPath);
+                    paragraphArray.push(new Paragraph({
+                        children: [
+                            new ImageRun({
+                                data: fs.readFileSync(mediaPath),
+                                transformation: {
+                                    width: 200,
+                                    height: 200,
+                                }
+                            })]
+                    }));
+
+                    archive.file(mediaPath, {
+                        name: `/${FoderName}/${fileName}`
+                    });
+
+                } else if (messageType == "voice") {
+                    let mediaPath = (await mysql.query("SELECT * FROM wxserviceserver.media where mediaid=?;", mediaid)).results[0].mediaPath;
+                    let fileName = path.basename(mediaPath);
+                    paragraphArray.push(new Paragraph({
+                        children: [
+                            new TextRun(`发送声音信息：${messageText} 文件名：${fileName} ${createTime}`),
+                        ]
+                    }));
+
+                    archive.file(mediaPath, {
+                        name: `/${FoderName}/${fileName}`
+                    });
+
+                } else if (messageType == "video") {
+                    let mediaPath = (await mysql.query("SELECT * FROM wxserviceserver.media where mediaid=?;", mediaid)).results[0].mediaPath;
+                    let fileName = path.basename(mediaPath);
+                    paragraphArray.push(new Paragraph({
+                        children: [
+                            new TextRun(`发送视频信息：文件名：${path.basename(mediaPath)} ${createTime}`),
+                        ]
+                    }));
+
+                    archive.file(mediaPath, {
+                        name: `/${FoderName}/${fileName}`
+                    });
+
+                } else if (messageType == "location") {
+                    paragraphArray.push(new Paragraph({
+                        children: [
+                            new TextRun(`发送位置信息：${messageText} ${createTime}`),
+                        ]
+                    }));
+                }
+            }
+
+            let doc = new Document({
+                sections: [{
+                    properties: {},
+                    children: paragraphArray
+                }]
+            });
+
+            // Used to export the file into a .docx file
+            Packer.toBuffer(doc).then((buffer) => {
+                fs.writeFileSync(`./public/${FoderName}.docx`, buffer);
+            });
+            // archive.append(await Packer.toBuffer(doc), { name: `${province}-${city}-${nickname}.docx` });
+            archive.append(`./public/${FoderName}.docx`, { name: `/${FoderName}/${FoderName}.docx` });
+        }
+
+        archive.finalize();
+    }
+
+    Package(req, res);
+});
 
 router.get('/MessageProcess', (req, res, next) => {
     //若确认此次GET请求来自微信服务器，请原样返回echostr参数内容，则接入生效，成为开发者成功，否则接入失败。
@@ -58,7 +220,7 @@ router.post('/MessageProcess', (req, res, next) => {
                     await mysql.query("INSERT INTO `wxserviceserver`.`message` (`openid`, `messageType`, `messageText`,`createTime`) VALUES (?,?,?,?);", [openid, 'text', text, formatDate.format(new Date(createTime * 1000), 'yyyy-MM-dd')]);
 
                     //模板消息实现
-                    wxAPI.TemplateMessage(openid).catch(err => { console.log(err) });
+                    // wxAPI.TemplateMessage(openid).catch(err => { console.log(err) });
                     //发送文字消息
                     res.send(msg.textMsg(fromUser, toUser, result.Content));
 
@@ -138,7 +300,9 @@ router.post('/MessageProcess', (req, res, next) => {
                     let currentTime = new Date();
                     let mediaPath = `./public/uploads/${formatDate.format(currentTime, 'yyyy-MM-dd')}_${formatDate.format(currentTime, 'hh-mm-ss')}.${format}`;
 
-                    await mysql.query("INSERT INTO `wxserviceserver`.`message` (`openid`, `messageType`,`messageText`,`createTime`) VALUES (?,?,?,?);", [openID, 'voice', `语音识别结果：${recognition}`, formatDate.format(new Date(createTime * 1000), 'yyyy-MM-dd')]);
+                    console.log(mediaID);
+
+                    await mysql.query("INSERT INTO `wxserviceserver`.`message` (`openid`, `messageType`,`messageText`,`mediaid`,`createTime`) VALUES (?,?,?,?,?);", [openID, 'voice', `语音识别结果：${recognition}`, mediaID, formatDate.format(new Date(createTime * 1000), 'yyyy-MM-dd')]);
                     await mysql.query("INSERT INTO `wxserviceserver`.`media` (`mediaid`,`mediaPath`) VALUES (?,?);", [mediaID, mediaPath]);
 
                     axios({
@@ -165,7 +329,7 @@ router.post('/MessageProcess', (req, res, next) => {
                     let currentTime = new Date();
                     let mediaPath = `./public/uploads/${formatDate.format(currentTime, 'yyyy-MM-dd')}_${formatDate.format(currentTime, 'hh-mm-ss')}.mp4`;
 
-                    await mysql.query("INSERT INTO `wxserviceserver`.`message` (`openid`, `messageType`,`createTime`) VALUES (?,?,?);", [openID, 'video', formatDate.format(new Date(createTime * 1000), 'yyyy-MM-dd')]);
+                    await mysql.query("INSERT INTO `wxserviceserver`.`message` (`openid`, `messageType`,`mediaid`,`createTime`) VALUES (?,?,?,?);", [openID, 'video', mediaID, formatDate.format(new Date(createTime * 1000), 'yyyy-MM-dd')]);
                     await mysql.query("INSERT INTO `wxserviceserver`.`media` (`mediaid`,`mediaPath`) VALUES (?,?);", [mediaID, mediaPath]);
 
                     axios({
@@ -330,6 +494,16 @@ router.get('/GenerateDoc', (req, res, next) => {
 
     GenerateDoc();
     res.sendStatus(200);
+});
+
+router.get('/GetUsersInfo', (req, res, next) => {
+    let getText = async (res) => {
+        let usersInfo = await mysql.query("SELECT * FROM wxserviceserver.user;");
+        // console.log(usersInfo.results);
+        res.json(usersInfo.results);
+    };
+
+    getText(res);
 });
 
 module.exports = router;
