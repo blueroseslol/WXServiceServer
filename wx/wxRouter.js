@@ -28,8 +28,7 @@ router.get('/GetMessageFile', (req, res, next) => {
             zlib: { level: 9 }
         });
 
-        var output = fs.createWriteStream("./public/WeChatMessage.zip");
-
+        // var output = fs.createWriteStream("./public/WeChatMessage.zip");
         //实现下载URL功能，不过可以被archive.pipe(res);代替
         /*
         output.on('close', function () {
